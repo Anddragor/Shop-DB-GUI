@@ -12,14 +12,15 @@ int main()
     try
     {
         std::string result;
-        auto res = cont.addSale("Курица", 3, "2023-11-05", "test");
-        
-        std::cout << res;
-        //for (auto const &row : res)
-        //{
-        //    for (auto const& field : row) std::cout << field.c_str() << " ";
-        //    std::cout << "\n";
-        //}
+        auto res = cont.getMostPopularGoods();
+
+        //auto res = cont.addGood("Креветки", 8.6);
+        //std::cout << res;
+        for (auto const &row : res)
+        {
+            for (auto const& field : row) std::cout << field.c_str() << " ";
+            std::cout << "\n";
+        }
     }
     catch (std::exception const& e)
     {
