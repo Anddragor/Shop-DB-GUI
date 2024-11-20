@@ -1,5 +1,9 @@
 #include "Controller.h"
 
+#include <codecvt>
+#include <iconv.h>
+#include <locale>
+
 Controller::Controller() {
     std::string HOST = "localhost",
         PORT = "5432",
@@ -57,12 +61,75 @@ pqxx::result Controller::getWarehouseTables()
     return res;
 }
 
-std::string Controller::addSale(std::string good_name, int amount, std::string date, std::string result)
+
+pqxx::result Controller::getMostPopularGoods()
 {
-    auto quary = "CALL sell_goods('" + good_name + "' , " + std::to_string(amount) + " , '" + date + "' , ' " + result + " ')";
+    //auto quary = "SELECT * FROM most_popular_goods;";
+    auto quary = "call count_delivery(5)";
 
     pqxx::work tx(*connection);
     pqxx::result res = tx.exec(quary);
+    tx.commit();
+
+    return res;
+}
+
+std::string Controller::addSale(std::string good_name, int amount, std::string date)
+{
+    good_name = to_utf8(good_name);
+    date = to_utf8(date);
+
+    std::string result = "All good";
+
+    auto query = "CALL sell_goods($1, $2, $3)";
+
+    pqxx::work tx(*connection);
+
+    tx.exec_params(query, good_name, std::to_string(amount), date);
+
+    tx.commit();
+
+    return result;
+}
+
+std::string Controller::to_utf8(const std::string& str)
+{
+    iconv_t cd = iconv_open("UTF-8", "WINDOWS-1251");
+    if (cd == (iconv_t)(-1)) {
+        throw std::runtime_error("iconv_open failed");
+    }
+
+    size_t in_len = str.size();
+    size_t out_len = in_len * 2;
+    char* in_buf = const_cast<char*>(str.c_str());
+    char* out_buf = new char[out_len];
+    char* out_ptr = out_buf;
+
+    if (iconv(cd, &in_buf, &in_len, &out_ptr, &out_len) == (size_t)(-1)) {
+        iconv_close(cd);
+        delete[] out_buf;
+        throw std::runtime_error("iconv failed");
+    }
+
+    std::string result(out_buf, out_ptr - out_buf);
+    delete[] out_buf;
+    iconv_close(cd);
+
+    return result;
+}
+
+std::string Controller::addGood(std::string good_name, double priority)
+{
+    good_name = to_utf8(good_name);
+
+    std::string result = "All good";
+
+    auto query = "INSERT INTO goods (name, priority) VALUES ($1, $2)";
+
+    pqxx::work tx(*connection);
+
+    tx.exec_params(query, good_name, priority);
+
     tx.commit();
 
     return result;
