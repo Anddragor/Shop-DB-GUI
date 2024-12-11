@@ -1,189 +1,209 @@
 #include "Controller.h"
 
-#include <codecvt>
-#include <iconv.h>
-#include <locale>
+#include <windows.h>
+#include <QString>
+#include <QSqlDatabase>
+#include <stdexcept>
+#include <QSettings>
+#include <QString>
+#include <QSqlDatabase>
+#include <stdexcept>
 
-Controller::Controller() {
-    std::string HOST = "localhost",
-        PORT = "5432",
-        DB_NAME = "postgres",
-        USER = "postgres",
-        PASSWORD = "1111";
-
-    std::string url = "host=" + HOST + " port=" + PORT + " dbname=" + DB_NAME +
-        " user=" + USER + " password=" + PASSWORD;
-
-    
-    this->connection = new pqxx::connection(url);
-};
-
-pqxx::result Controller::getGoods() {
-    auto quary = "SELECT * FROM goods";
-
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
-
-    return res;
-};
-
-pqxx::result Controller::getSales() 
+Controller::Controller()
 {
-    auto quary = "SELECT * FROM sales";
+    QString iniFilePath = "config.ini";
 
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
+    QSettings settings(iniFilePath, QSettings::IniFormat);
 
-    return res;
-};
+    QString host = settings.value("DBSettings/host", "localhost").toString();
+    QString port = settings.value("DBSettings/port", "5432").toString();
+    QString name = settings.value("DBSettings/name", "postgres").toString();
+    QString user = settings.value("DBSettings/user", "postgres").toString();
+    QString password = settings.value("DBSettings/password", "1111").toString();
 
-pqxx::result Controller::getWarehouseStatistic(int warehouse_number)
-{
-    auto quary = "SELECT * FROM warehouse" + std::to_string(warehouse_number);
+    connection = QSqlDatabase::addDatabase("QPSQL");
+    connection.setHostName(host);
+    connection.setPort(port.toInt());
+    connection.setDatabaseName(name);
+    connection.setUserName(user);
+    connection.setPassword(password);
 
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
-
-    return res;
-}
-
-pqxx::result Controller::getWarehouseTables()
-{
-    auto quary = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name LIKE '%warehouse%'";
-
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
-
-    return res;
-}
-
-
-pqxx::result Controller::getMostPopularGoods()
-{
-    //auto quary = "SELECT * FROM most_popular_goods;";
-    auto quary = "call count_delivery(5)";
-
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
-
-    return res;
-}
-
-std::string Controller::addSale(std::string good_name, int amount, std::string date)
-{
-    good_name = to_utf8(good_name);
-    date = to_utf8(date);
-
-    std::string result = "All good";
-
-    auto query = "CALL sell_goods($1, $2, $3)";
-
-    pqxx::work tx(*connection);
-
-    tx.exec_params(query, good_name, std::to_string(amount), date);
-
-    tx.commit();
-
-    return result;
-}
-
-std::string Controller::to_utf8(const std::string& str)
-{
-    iconv_t cd = iconv_open("UTF-8", "WINDOWS-1251");
-    if (cd == (iconv_t)(-1)) {
-        throw std::runtime_error("iconv_open failed");
-    }
-
-    size_t in_len = str.size();
-    size_t out_len = in_len * 2;
-    char* in_buf = const_cast<char*>(str.c_str());
-    char* out_buf = new char[out_len];
-    char* out_ptr = out_buf;
-
-    if (iconv(cd, &in_buf, &in_len, &out_ptr, &out_len) == (size_t)(-1)) {
-        iconv_close(cd);
-        delete[] out_buf;
-        throw std::runtime_error("iconv failed");
-    }
-
-    std::string result(out_buf, out_ptr - out_buf);
-    delete[] out_buf;
-    iconv_close(cd);
-
-    return result;
-}
-
-std::string Controller::addGood(std::string good_name, double priority)
-{
-    good_name = to_utf8(good_name);
-
-    std::string result = "All good";
-
-    auto query = "INSERT INTO goods (name, priority) VALUES ($1, $2)";
-
-    pqxx::work tx(*connection);
-
-    tx.exec_params(query, good_name, priority);
-
-    tx.commit();
-
-    return result;
-}
-
-pqxx::result Controller::mergeTables(pqxx::result& tables, std::string merge_base, std::string merging_column)
-{
-    if (tables.size() < 2) throw std::exception("Not enough tables to merge...\n");
-
-    std::string quary = "SELECT " + tables[0][0].as<std::string>() + "." + merge_base + ", ";
-
-    for (auto it = tables.begin(); it != tables.end(); it++)
+    if (!connection.open())
     {
-        if (it != tables.begin()) quary += " + ";
-        quary += " COALESCE(SUM(" + (*it)[0].as<std::string>() + "." + merging_column + "), 0)";
+        throw std::runtime_error("Failed to connect to the database");
     }
-
-    quary += " AS total FROM " + tables[0][0].as<std::string>() + " FULL OUTER JOIN ";
-
-    for (auto it = std::next(tables.begin()); it != tables.end(); ++it) {
-        quary += (*it)[0].as<std::string>() + " ON ";
-        quary += tables[0][0].as<std::string>() + "." + merge_base + " = " + (*it)[0].as<std::string>() + "." + merge_base;
-    }
-
-    quary += " WHERE warehouse1.good_id IS NOT NULL GROUP BY warehouse1.good_id ";
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
-
-    return res;
 }
 
-pqxx::result Controller::getMergedWarehouses()
+
+Controller::~Controller() 
 {
-    auto tables = this->getWarehouseTables();
-    auto res = mergeTables(tables, "good_id", "good_count");
-
-    return res;
+    connection.close();
 }
 
-void Controller::removeGood(int good_id)
+QSqlQuery Controller::getGoods() 
 {
-    auto quary = "DELETE FROM goods WHERE id = " + std::to_string(good_id);
-
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
+    QString query = "SELECT * FROM goods";
+    QSqlQuery result(connection);
+    if (!result.exec(query)) throw std::runtime_error("Query execution failed: " + result.lastError().text().toStdString());
+    return result;
 }
 
-void Controller::closeSale(int sale_id)
+QSqlQuery Controller::getSales() 
 {
-    auto quary = "DELETE FROM sales WHERE id = " + std::to_string(sale_id);
-
-    pqxx::work tx(*connection);
-    pqxx::result res = tx.exec(quary);
-    tx.commit();
+    QString query = "SELECT * FROM sales";
+    QSqlQuery result(connection);
+    if (!result.exec(query)) throw std::runtime_error("Query execution failed: " + result.lastError().text().toStdString());
+    return result;
 }
+
+QSqlQuery Controller::getMostPopularGoods() 
+{
+    QString query = "SELECT * FROM most_popular_goods";
+    QSqlQuery result(connection);
+    if (!result.exec(query)) throw std::runtime_error("Query execution failed: " + result.lastError().text().toStdString());
+    return result;
+}
+
+QSqlQuery Controller::getWarehouseStatistic(size_t warehouse_number) 
+{
+    QString query = "SELECT * FROM warehouse" + QString::number(warehouse_number);
+    QSqlQuery result(connection);
+    if (!result.exec(query)) throw std::runtime_error("Query execution failed: " + result.lastError().text().toStdString());
+    return result;
+}
+
+QSqlQuery Controller::getGraphTable(const QString& good_name)
+{
+    QString query = "SELECT * FROM get_graph_table(:good_name)";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":good_name", good_name);
+    if (!q.exec()) throw std::runtime_error("User lookup failed: " + q.lastError().text().toStdString());
+    return q;
+}
+
+size_t Controller::getSellsChange(QString& good_name, QString& beginDate, QString& endDate) 
+{
+    QString query = QString("CALL get_sells_change('%1', '%2', '%3', 0)")
+                        .arg(good_name)
+                        .arg(beginDate)
+                        .arg(endDate);
+
+    QSqlQuery q(connection);
+
+    if (!q.exec(query)) throw std::runtime_error("Sells change calculation failed: " + q.lastError().text().toStdString());
+
+    if (q.next()) return q.value(0).toUInt();
+
+    return 0;
+}
+
+
+void Controller::addUser(QString& username, QString& password, bool rights) 
+{
+    QString query = "INSERT INTO users (name, password, rights) VALUES (:username, :password, :rights)";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":username", username);
+    q.bindValue(":password", password);
+    q.bindValue(":rights", rights);
+    if (!q.exec()) throw std::runtime_error("User insertion failed: " + q.lastError().text().toStdString());
+}
+
+bool Controller::findUser(QString& username, QString& password) 
+{
+    QString query = "SELECT * FROM users WHERE name = :username AND password = :password";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":username", username);
+    q.bindValue(":password", password);
+    if (!q.exec()) throw std::runtime_error("User lookup failed: " + q.lastError().text().toStdString());
+    return q.next();
+}
+
+bool Controller::findUser(QString& username) 
+{
+    QString query = "SELECT * FROM users WHERE name = :username";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":username", username);
+    if (!q.exec()) throw std::runtime_error("User lookup failed: " + q.lastError().text().toStdString());
+    return q.next();
+}
+
+bool Controller::getUserRights(QString& username) 
+{
+    QString query = "SELECT rights FROM users WHERE name = :username";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":username", username);
+    if (!q.exec()) throw std::runtime_error("Rights lookup failed: " + q.lastError().text().toStdString());
+    if (q.next()) return q.value(0).toBool();
+    return false;
+}
+
+void Controller::addSale(size_t good_id, size_t amount, QString& date) 
+{
+    QString query = "INSERT INTO sales (good_id, good_count, create_date) VALUES (:good_id, :amount, :date)";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":good_id", good_id);
+    q.bindValue(":amount", amount);
+    q.bindValue(":date", date);
+    if (!q.exec()) throw std::runtime_error("Sale insertion failed: " + q.lastError().text().toStdString());
+}
+
+void Controller::addGood(QString& good_name, double priority) 
+{
+    QString query = "INSERT INTO goods (name, priority) VALUES (:good_name, :priority)";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":good_name", good_name);
+    q.bindValue(":priority", priority);
+    if (!q.exec()) throw std::runtime_error("Good insertion failed: " + q.lastError().text().toStdString());
+}
+
+void Controller::modifyGoods(QString& id, QString& newValue, QString& column)
+{
+    QString query = "UPDATE goods SET " + column + " = :newValue WHERE id = :id";
+
+    QSqlQuery q(connection);
+    q.prepare(query);
+
+    q.bindValue(":newValue", newValue);
+    q.bindValue(":id", id);
+
+    if (!q.exec()) throw std::runtime_error("Good modification failed: " + q.lastError().text().toStdString());
+}
+
+void Controller::modifySells(QString& id, QString& newValue, QString& column)
+{
+    QString query = "UPDATE sales SET " + column + " = :newValue WHERE id = :id";
+
+    QSqlQuery q(connection);
+    q.prepare(query);
+
+    q.bindValue(":newValue", newValue);
+    q.bindValue(":id", id);
+
+    if (!q.exec()) throw std::runtime_error("Sales modification failed: " + q.lastError().text().toStdString());
+}
+
+void Controller::removeGood(size_t good_id) 
+{
+    QString query = "DELETE FROM goods WHERE id = :good_id";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":good_id", good_id);
+    if (!q.exec()) throw std::runtime_error("Good deletion failed: " + q.lastError().text().toStdString());
+}
+
+void Controller::closeSale(size_t sale_id) 
+{
+    QString query = "DELETE FROM sales WHERE id = :sale_id";
+    QSqlQuery q(connection);
+    q.prepare(query);
+    q.bindValue(":sale_id", sale_id);
+    if (!q.exec()) throw std::runtime_error("Sale deletion failed: " + q.lastError().text().toStdString());
+}
+

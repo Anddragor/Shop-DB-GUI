@@ -1,28 +1,39 @@
-#pragma once
+#ifndef CONTROLLER_H
+#define CONTROLLER_H
 
-#include <string>
-#include <pqxx/pqxx>
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlQuery>
+#include <QtSql/QSqlError>
+#include <QString>
 
 class Controller {
 private:
-    pqxx::connection *connection;
-
-    std::string to_utf8(const std::string& str);
-
-    pqxx::result getWarehouseTables();
-    pqxx::result mergeTables(pqxx::result& tables, std::string merge_base, std::string merging_column);
+    QSqlDatabase connection;
 public:
     Controller();
-    pqxx::result getGoods();
-    pqxx::result getSales();
-    pqxx::result getMostPopularGoods();
-    
-    pqxx::result getWarehouseStatistic(int warehouse_number);
-    pqxx::result getMergedWarehouses();
+    ~Controller();
 
-    std::string addSale(std::string good_name, int amount, std::string date);
-    std::string addGood(std::string good_name, double priority);
+    QSqlQuery getGoods();
+    QSqlQuery getSales();
+    QSqlQuery getMostPopularGoods();
 
-    void removeGood(int good_id);
-    void closeSale(int sale_id);
+    QSqlQuery getWarehouseStatistic(size_t warehouse_number);
+    QSqlQuery getGraphTable(const QString& good_name);
+    size_t getSellsChange(QString& good_name, QString& beginDate, QString& endDate);
+
+    void addUser(QString& username, QString& password, bool rights);
+    bool findUser(QString& username, QString& password);
+    bool findUser(QString& username);
+    bool getUserRights(QString& username);
+
+    void addSale(size_t good_name, size_t amount, QString& date);
+    void addGood(QString& good_name, double priority);
+
+    void modifyGoods(QString& id, QString& newValue, QString& column);
+    void modifySells(QString& id, QString& newValue, QString& column);
+
+    void removeGood(size_t good_id);
+    void closeSale(size_t sale_id);
 };
+
+#endif // CONTROLLER_H
