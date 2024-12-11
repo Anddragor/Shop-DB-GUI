@@ -4,7 +4,7 @@
 
 class Admin : public virtual Role {
 public:
-	Admin(std::string name)
+    Admin(QString name)
 	{
 		this->name = name;
 		this->rights = 1;

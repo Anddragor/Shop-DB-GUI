@@ -1,6 +1,5 @@
 #pragma once
 
-#include <string>
 #include "Role.h"
 #include "User.h"
 #include "Admin.h"
@@ -11,8 +10,10 @@ class UserManager
 private:
 	Controller controller;
 
-	std::string generatePassword(std::string password);
+    QString generatePassword(QString password);
 public:
-	Role signUp(std::string username, std::string password);
-	Role signIn(std::string username, std::string password);
+    Role signUp(QString username, QString password);
+    Role signIn(QString username, QString password);
+
+    void createAdmin(QString username, QString password);
 };

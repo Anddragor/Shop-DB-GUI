@@ -1,10 +1,10 @@
 #pragma once
 
-#include <string>
+#include <QString>
 
 class Role {
 protected:
-	std::string name;
+    QString name;
 	bool rights;
 public:
 

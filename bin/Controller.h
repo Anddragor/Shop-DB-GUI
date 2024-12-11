@@ -1,40 +1,39 @@
-#pragma once
+#ifndef CONTROLLER_H
+#define CONTROLLER_H
 
-#include <string>
-#include <pqxx/pqxx>
+#include <QtSql/QSqlDatabase>
+#include <QtSql/QSqlQuery>
+#include <QtSql/QSqlError>
+#include <QString>
 
-class Controller 
-{
+class Controller {
 private:
-    pqxx::connection *connection;
-
-    std::string to_utf8(const std::string& str);
-
-    pqxx::result getWarehouseTables();
-    pqxx::result mergeTables(pqxx::result& tables, std::string merge_base, std::string merging_column);
+    QSqlDatabase connection;
 public:
     Controller();
     ~Controller();
-    pqxx::result getGoods();
-    pqxx::result getSales();
-    pqxx::result getMostPopularGoods();
-    
-    pqxx::result getWarehouseStatistic(size_t warehouse_number);
-    pqxx::result getMergedWarehouses();
-    pqxx::result getGraphTable(std::string good_name);
 
-    bool findUser(std::string username, std::string password);
-    bool getUserRights(std::string username);
+    QSqlQuery getGoods();
+    QSqlQuery getSales();
+    QSqlQuery getMostPopularGoods();
 
-    size_t getSellsChange(std::string good_name, std::string beginDate, std::string endDate);
+    QSqlQuery getWarehouseStatistic(size_t warehouse_number);
+    QSqlQuery getGraphTable(const QString& good_name);
+    size_t getSellsChange(QString& good_name, QString& beginDate, QString& endDate);
 
-    std::string addSale(std::string good_name, size_t amount, std::string date);
-    std::string addGood(std::string good_name, double priority);
+    void addUser(QString& username, QString& password, bool rights);
+    bool findUser(QString& username, QString& password);
+    bool findUser(QString& username);
+    bool getUserRights(QString& username);
 
-    void addUser(std::string username, std::string password, bool rights);
+    void addSale(size_t good_name, size_t amount, QString& date);
+    void addGood(QString& good_name, double priority);
+
+    void modifyGoods(QString& id, QString& newValue, QString& column);
+    void modifySells(QString& id, QString& newValue, QString& column);
 
     void removeGood(size_t good_id);
     void closeSale(size_t sale_id);
-
-
 };
+
+#endif // CONTROLLER_H
